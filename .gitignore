@@ -1,0 +1,22 @@
+# Build
+build/
+*.o
+*.a
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Results
+results/
+*.json
+!golden/*.json
+!test_data/*.json
+
+# OS
+.DS_Store
+Thumbs.db
