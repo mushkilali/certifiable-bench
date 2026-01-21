@@ -115,7 +115,7 @@ Faults are **sticky** — once set, they persist until explicitly cleared.
 
 ```c
 static inline bool cb_has_fault(const cb_fault_flags_t *f) {
-    return f->overflow || f->underflow || f->div_zero || 
+    return f->overflow || f->underflow || f->div_zero ||
            f->timer_error || f->verify_fail;
 }
 
@@ -171,14 +171,14 @@ All operations use 64-bit integers with explicit overflow checking.
  */
 uint64_t cb_isqrt64(uint64_t n) {
     if (n == 0) return 0;
-    
+
     uint64_t lo = 1;
     uint64_t hi = n;
     uint64_t mid, sq;
-    
+
     while (lo < hi) {
         mid = lo + (hi - lo + 1) / 2;
-        
+
         /* Overflow-safe: check mid <= n/mid instead of mid*mid <= n */
         if (mid <= n / mid) {
             lo = mid;
@@ -186,7 +186,7 @@ uint64_t cb_isqrt64(uint64_t n) {
             hi = mid - 1;
         }
     }
-    
+
     return lo;
 }
 ```
@@ -225,7 +225,7 @@ MAD = percentile(deviations, 50)
 For each sample xᵢ:
     /* Scaled by 10000 to avoid floating-point */
     modified_z_scaled = (6745 × |xᵢ - median|) / MAD
-    
+
     if modified_z_scaled > 35000:    /* 3.5 × 10000 */
         mark as outlier
 ```
@@ -378,15 +378,15 @@ typedef struct {
 bool cb_env_is_stable(const cb_env_stats_t *env) {
     /* Frequency drop > 5% indicates thermal throttling */
     uint64_t threshold = (env->start.cpu_freq_hz * 95) / 100;
-    
+
     if (env->end.cpu_freq_hz < threshold) {
         return false;
     }
-    
+
     if (env->total_throttle_events > 0) {
         return false;
     }
-    
+
     return true;
 }
 ```

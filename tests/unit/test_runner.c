@@ -28,6 +28,10 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
+/* Shared sample buffer for tests */
+#define TEST_SAMPLE_CAPACITY 1000
+static uint64_t g_sample_buffer[TEST_SAMPLE_CAPACITY];
+
 #define TEST_ASSERT(cond, msg) do { \
     g_tests_run++; \
     if (!(cond)) { \
@@ -164,11 +168,11 @@ static int test_runner_init_valid(void)
     cb_config_t config;
     cb_config_init(&config);
     config.measure_iterations = 100;
-    cb_result_code_t rc = cb_runner_init(&runner, &config);
+    cb_result_code_t rc = cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     TEST_ASSERT_EQ(rc, CB_OK, "runner_init succeeds");
     TEST_ASSERT(runner.initialised, "runner initialised");
-    TEST_ASSERT(runner.samples != NULL, "samples allocated");
-    TEST_ASSERT_EQ(runner.sample_capacity, 100, "capacity matches");
+    TEST_ASSERT(runner.samples != NULL, "samples set");
+    TEST_ASSERT_EQ(runner.sample_capacity, TEST_SAMPLE_CAPACITY, "capacity matches");
     cb_runner_cleanup(&runner);
     return 0;
 }
@@ -178,8 +182,9 @@ static int test_runner_init_null(void)
     cb_runner_t runner;
     cb_config_t config;
     cb_config_init(&config);
-    TEST_ASSERT_EQ(cb_runner_init(NULL, &config), CB_ERR_NULL_PTR, "NULL runner fails");
-    TEST_ASSERT_EQ(cb_runner_init(&runner, NULL), CB_ERR_NULL_PTR, "NULL config fails");
+    TEST_ASSERT_EQ(cb_runner_init(NULL, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY), CB_ERR_NULL_PTR, "NULL runner fails");
+    TEST_ASSERT_EQ(cb_runner_init(&runner, NULL, g_sample_buffer, TEST_SAMPLE_CAPACITY), CB_ERR_NULL_PTR, "NULL config fails");
+    TEST_ASSERT_EQ(cb_runner_init(&runner, &config, NULL, TEST_SAMPLE_CAPACITY), CB_ERR_NULL_PTR, "NULL buffer fails");
     return 0;
 }
 
@@ -195,7 +200,7 @@ static int test_warmup_count(void)
     cb_config_init(&config);
     config.warmup_iterations = 50;
     config.measure_iterations = 10;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     g_inference_count = 0;
     cb_result_code_t rc = cb_runner_warmup(&runner, mock_inference_copy, NULL,
                                             input, sizeof(input), output, sizeof(output));
@@ -214,7 +219,7 @@ static int test_warmup_failure(void)
     cb_config_init(&config);
     config.warmup_iterations = 10;
     config.measure_iterations = 10;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_result_code_t rc = cb_runner_warmup(&runner, mock_inference_fail, NULL,
                                             input, sizeof(input), output, sizeof(output));
     TEST_ASSERT_NE(rc, CB_OK, "warmup with failing fn fails");
@@ -236,7 +241,7 @@ static int test_execute_sample_count(void)
     config.warmup_iterations = 5;
     config.measure_iterations = 100;
     config.verify_outputs = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     g_inference_count = 0;
     cb_runner_execute(&runner, mock_inference_copy, NULL,
                       input, sizeof(input), output, sizeof(output));
@@ -256,7 +261,7 @@ static int test_execute_positive_samples(void)
     config.warmup_iterations = 5;
     config.measure_iterations = 50;
     config.verify_outputs = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_runner_execute(&runner, mock_inference_work, NULL,
                       input, sizeof(input), output, sizeof(output));
     for (i = 0; i < runner.samples_collected; i++) {
@@ -281,7 +286,7 @@ static int test_result_platform(void)
     config.measure_iterations = 10;
     config.verify_outputs = false;
     config.monitor_environment = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_runner_execute(&runner, mock_inference_copy, NULL, input, 64, output, 64);
     cb_runner_get_result(&runner, &result);
     TEST_ASSERT(strlen(result.platform) > 0, "platform set");
@@ -300,7 +305,7 @@ static int test_result_statistics(void)
     config.measure_iterations = 100;
     config.verify_outputs = false;
     config.monitor_environment = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_runner_execute(&runner, mock_inference_work, NULL, input, 64, output, 64);
     cb_runner_get_result(&runner, &result);
     TEST_ASSERT_GT(result.latency.min_ns, 0, "min > 0");
@@ -323,7 +328,7 @@ static int test_result_throughput(void)
     config.batch_size = 4;
     config.verify_outputs = false;
     config.monitor_environment = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_runner_execute(&runner, mock_inference_work, NULL, input, 64, output, 64);
     cb_runner_get_result(&runner, &result);
     TEST_ASSERT_GT(result.throughput.inferences_per_sec, 0, "throughput > 0");
@@ -345,7 +350,7 @@ static int test_result_timing(void)
     config.measure_iterations = 10;
     config.verify_outputs = false;
     config.monitor_environment = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_runner_execute(&runner, mock_inference_copy, NULL, input, 64, output, 64);
     cb_runner_get_result(&runner, &result);
     TEST_ASSERT_GT(result.benchmark_duration_ns, 0, "duration > 0");
@@ -372,7 +377,7 @@ static int test_verification_hash(void)
     config.measure_iterations = 10;
     config.verify_outputs = true;
     config.monitor_environment = false;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     cb_runner_execute(&runner, mock_inference_copy, NULL, input, 64, output, 64);
     cb_runner_get_result(&runner, &result);
     for (i = 0; i < CB_HASH_SIZE; i++) {
@@ -400,7 +405,9 @@ static int test_run_benchmark(void)
     config.verify_outputs = false;
     config.monitor_environment = false;
     cb_result_code_t rc = cb_run_benchmark(&config, mock_inference_work, NULL,
-                                            input, 64, output, 64, &result);
+                                            input, 64, output, 64,
+                                            g_sample_buffer, TEST_SAMPLE_CAPACITY,
+                                            &result);
     TEST_ASSERT_EQ(rc, CB_OK, "run_benchmark succeeds");
     TEST_ASSERT_GT(result.latency.min_ns, 0, "latency measured");
     TEST_ASSERT_EQ(result.latency.sample_count, 50, "correct samples");
@@ -423,7 +430,7 @@ static int test_cleanup_resets(void)
     cb_config_t config;
     cb_config_init(&config);
     config.measure_iterations = 10;
-    cb_runner_init(&runner, &config);
+    cb_runner_init(&runner, &config, g_sample_buffer, TEST_SAMPLE_CAPACITY);
     TEST_ASSERT(runner.initialised, "initialised before cleanup");
     cb_runner_cleanup(&runner);
     TEST_ASSERT(!runner.initialised, "not initialised after cleanup");

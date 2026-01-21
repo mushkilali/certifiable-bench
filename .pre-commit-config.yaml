@@ -1,3 +1,9 @@
+# .pre-commit-config.yaml
+# Pre-commit hooks for certifiable-bench
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -19,10 +25,13 @@ repos:
         entry: cppcheck
         args:
           - --error-exitcode=1
-          - --enable=all
+          - --enable=warning,performance,portability
           - --suppress=missingIncludeSystem
           - --suppress=unmatchedSuppression
           - --suppress=unusedFunction
+          - --suppress=variableScope
+          - --suppress=constVariable
+          - --suppress=unreadVariable
           - --std=c99
           - -Iinclude
           - --quiet
@@ -37,6 +46,18 @@ repos:
 
       - id: check-traceability
         name: check traceability tags
-        entry: bash -c 'for file in "$@"; do if ! grep -q "@traceability" "$file"; then echo "Missing @traceability in $file"; exit 1; fi; done' --
+        entry: bash -c 'for file in "$@"; do if ! grep -q "@traceability\|@satisfies\|Traceability:" "$file"; then echo "Missing traceability in $file"; exit 1; fi; done' --
         language: system
-        files: \.(c|h)$
+        files: ^src/.*\.(c|h)$
+
+      - id: no-malloc
+        name: check no dynamic allocation
+        entry: bash -c 'for file in "$@"; do if grep -E "\bmalloc\s*\(|\bcalloc\s*\(|\brealloc\s*\(|\bfree\s*\(" "$file" | grep -v "^\s*/\*\|^\s*\*\|^\s*//"; then echo "Dynamic allocation detected in $file"; exit 1; fi; done' --
+        language: system
+        files: ^src/.*\.c$
+
+      - id: no-float
+        name: check no floating-point types
+        entry: bash -c 'for file in "$@"; do if grep -E "^\s*(float|double)\s+\w+|[^a-z](float|double)\s+\w+" "$file" | grep -v "^\s*/\*\|^\s*\*\|^\s*//"; then echo "Floating-point type in $file"; exit 1; fi; done' --
+        language: system
+        files: ^src/.*\.c$

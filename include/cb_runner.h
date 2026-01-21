@@ -67,22 +67,27 @@ cb_result_code_t cb_config_validate(const cb_config_t *config);
  *─────────────────────────────────────────────────────────────────────────────*/
 
 /**
- * @brief Initialise benchmark runner
+ * @brief Initialise benchmark runner with caller-provided buffer
  *
- * Allocates sample buffer and prepares runner state.
+ * Prepares runner state using caller-provided sample buffer.
+ * No dynamic allocation — all buffers must be provided by caller.
  * Must be called before warmup or execute.
  *
- * @param runner Runner state to initialise
- * @param config Benchmark configuration
+ * @param runner         Runner state to initialise
+ * @param config         Benchmark configuration
+ * @param sample_buffer  Caller-provided buffer for timing samples
+ * @param buffer_capacity Number of samples buffer can hold (must be >= config->measure_iterations)
  * @return CB_OK on success
- * @return CB_ERR_NULL_PTR if runner or config is NULL
- * @return CB_ERR_INVALID_CONFIG if config validation fails
- * @return CB_ERR_OUT_OF_MEMORY if sample buffer allocation fails
+ * @return CB_ERR_NULL_PTR if runner, config, or sample_buffer is NULL
+ * @return CB_ERR_INVALID_CONFIG if config validation fails or buffer too small
  *
  * @satisfies RUNNER-F-014, RUNNER-NF-010, RUNNER-NF-011
  * @traceability SRS-003-RUNNER §4.2
  */
-cb_result_code_t cb_runner_init(cb_runner_t *runner, const cb_config_t *config);
+cb_result_code_t cb_runner_init(cb_runner_t *runner,
+                                 const cb_config_t *config,
+                                 uint64_t *sample_buffer,
+                                 uint32_t buffer_capacity);
 
 /**
  * @brief Execute warmup phase
@@ -167,7 +172,7 @@ cb_result_code_t cb_runner_get_result(const cb_runner_t *runner,
 /**
  * @brief Clean up runner resources
  *
- * Frees sample buffer and resets state.
+ * Resets runner state. Does not free sample buffer (caller owns it).
  *
  * @param runner Runner to clean up
  */
@@ -181,15 +186,18 @@ void cb_runner_cleanup(cb_runner_t *runner);
  * @brief Run complete inference benchmark
  *
  * Convenience function that performs init → warmup → execute → get_result → cleanup.
+ * Caller must provide sample buffer.
  *
- * @param config      Benchmark configuration
- * @param fn          Inference function to call
- * @param ctx         User context passed to inference function
- * @param input       Input buffer
- * @param input_size  Size of input buffer
- * @param output      Output buffer
- * @param output_size Size of output buffer
- * @param result      Output result structure
+ * @param config         Benchmark configuration
+ * @param fn             Inference function to call
+ * @param ctx            User context passed to inference function
+ * @param input          Input buffer
+ * @param input_size     Size of input buffer
+ * @param output         Output buffer
+ * @param output_size    Size of output buffer
+ * @param sample_buffer  Caller-provided buffer for timing samples
+ * @param buffer_capacity Number of samples buffer can hold
+ * @param result         Output result structure
  * @return CB_OK on success
  * @return Error codes from underlying operations
  *
@@ -203,6 +211,8 @@ cb_result_code_t cb_run_benchmark(const cb_config_t *config,
                                    uint32_t input_size,
                                    void *output,
                                    uint32_t output_size,
+                                   uint64_t *sample_buffer,
+                                   uint32_t buffer_capacity,
                                    cb_result_t *result);
 
 #ifdef __cplusplus

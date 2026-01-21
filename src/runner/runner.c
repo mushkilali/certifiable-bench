@@ -25,7 +25,6 @@
 #include "cb_platform.h"
 #include "cb_verify.h"
 
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -121,14 +120,17 @@ cb_result_code_t cb_config_validate(const cb_config_t *config)
  *─────────────────────────────────────────────────────────────────────────────*/
 
 /**
- * @brief Initialise benchmark runner
+ * @brief Initialise benchmark runner with caller-provided buffer
  * @satisfies RUNNER-F-014, RUNNER-NF-010, RUNNER-NF-011
  */
-cb_result_code_t cb_runner_init(cb_runner_t *runner, const cb_config_t *config)
+cb_result_code_t cb_runner_init(cb_runner_t *runner,
+                                 const cb_config_t *config,
+                                 uint64_t *sample_buffer,
+                                 uint32_t buffer_capacity)
 {
     cb_result_code_t rc;
 
-    if (runner == NULL || config == NULL) {
+    if (runner == NULL || config == NULL || sample_buffer == NULL) {
         return CB_ERR_NULL_PTR;
     }
 
@@ -138,24 +140,25 @@ cb_result_code_t cb_runner_init(cb_runner_t *runner, const cb_config_t *config)
         return rc;
     }
 
+    /* Check buffer is large enough */
+    if (buffer_capacity < config->measure_iterations) {
+        return CB_ERR_INVALID_CONFIG;
+    }
+
     /* Clear state */
     memset(runner, 0, sizeof(*runner));
 
     /* Copy configuration */
     memcpy(&runner->config, config, sizeof(cb_config_t));
 
-    /* RUNNER-F-014, RUNNER-NF-010: Pre-allocate sample buffer */
-    runner->sample_capacity = config->measure_iterations;
-    runner->samples = (uint64_t *)malloc(runner->sample_capacity * sizeof(uint64_t));
-    if (runner->samples == NULL) {
-        return CB_ERR_OUT_OF_MEMORY;
-    }
+    /* RUNNER-F-014, RUNNER-NF-010: Use caller-provided sample buffer */
+    runner->samples = sample_buffer;
+    runner->sample_capacity = buffer_capacity;
 
     /* Initialise timer */
     cb_timer_source_t actual = cb_timer_init(config->timer_source);
     if (actual == CB_TIMER_AUTO) {
         /* Timer init failed - no suitable timer found */
-        free(runner->samples);
         runner->samples = NULL;
         return CB_ERR_TIMER_INIT;
     }
@@ -344,17 +347,9 @@ cb_result_code_t cb_runner_get_result(const cb_runner_t *runner,
     /* RUNNER-F-042, RUNNER-F-023: Compute statistics AFTER all iterations */
     cb_fault_clear(&stats_faults);
 
-    /* Need non-const copy for sorting */
-    uint64_t *samples_copy = (uint64_t *)malloc(runner->samples_collected * sizeof(uint64_t));
-    if (samples_copy == NULL) {
-        return CB_ERR_OUT_OF_MEMORY;
-    }
-    memcpy(samples_copy, runner->samples, runner->samples_collected * sizeof(uint64_t));
-
-    cb_compute_stats(samples_copy, runner->samples_collected,
+    /* Sort samples in place - benchmark is complete, original order not needed */
+    cb_compute_stats(runner->samples, runner->samples_collected,
                      &result->latency, &stats_faults);
-
-    free(samples_copy);
 
     /* RUNNER-F-043, RUNNER-F-050, RUNNER-F-051: Throughput calculation */
     /* Total latency = sum of all samples */
@@ -424,6 +419,7 @@ cb_result_code_t cb_runner_get_result(const cb_runner_t *runner,
 
 /**
  * @brief Clean up runner resources
+ * Does not free sample buffer - caller owns it.
  */
 void cb_runner_cleanup(cb_runner_t *runner)
 {
@@ -431,11 +427,8 @@ void cb_runner_cleanup(cb_runner_t *runner)
         return;
     }
 
-    if (runner->samples != NULL) {
-        free(runner->samples);
-        runner->samples = NULL;
-    }
-
+    /* Clear pointer but don't free - caller owns the buffer */
+    runner->samples = NULL;
     runner->initialised = false;
     runner->warmup_complete = false;
     runner->sample_capacity = 0;
@@ -457,13 +450,15 @@ cb_result_code_t cb_run_benchmark(const cb_config_t *config,
                                    uint32_t input_size,
                                    void *output,
                                    uint32_t output_size,
+                                   uint64_t *sample_buffer,
+                                   uint32_t buffer_capacity,
                                    cb_result_t *result)
 {
     cb_runner_t runner;
     cb_result_code_t rc;
 
-    /* Initialise */
-    rc = cb_runner_init(&runner, config);
+    /* Initialise with caller-provided buffer */
+    rc = cb_runner_init(&runner, config, sample_buffer, buffer_capacity);
     if (rc != CB_OK) {
         return rc;
     }

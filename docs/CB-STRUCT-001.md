@@ -98,7 +98,7 @@ typedef struct {
  * @return true if result is invalid
  */
 static inline bool cb_has_fault(const cb_fault_flags_t *f) {
-    return f->overflow || f->underflow || f->div_zero || 
+    return f->overflow || f->underflow || f->div_zero ||
            f->timer_error || f->verify_fail;
 }
 
@@ -292,15 +292,15 @@ typedef struct {
 static inline bool cb_env_is_stable(const cb_env_stats_t *env) {
     /* Frequency drop > 5% indicates thermal throttling */
     uint64_t threshold = (env->start.cpu_freq_hz * 95) / 100;
-    
+
     if (env->end.cpu_freq_hz < threshold) {
         return false;
     }
-    
+
     if (env->total_throttle_events > 0) {
         return false;
     }
-    
+
     return true;
 }
 ```
@@ -392,26 +392,26 @@ typedef struct {
     uint32_t measure_iterations;   /**< Iterations to measure */
     uint32_t batch_size;           /**< Inference batch size */
     uint32_t _padding1;
-    
+
     /* Timer configuration */
     cb_timer_source_t timer_source;  /**< Preferred timer */
     uint32_t _padding2;
-    
+
     /* Verification */
     bool     verify_outputs;       /**< Check bit-identity during bench */
     uint8_t  _padding3[7];
-    
+
     /* Histogram configuration */
     bool     collect_histogram;    /**< Collect latency distribution */
     uint8_t  _padding4[3];
     uint32_t histogram_bins;       /**< Number of histogram bins */
     uint64_t histogram_min_ns;     /**< Histogram lower bound */
     uint64_t histogram_max_ns;     /**< Histogram upper bound */
-    
+
     /* Environmental monitoring */
     bool     monitor_environment;  /**< Collect thermal/frequency data */
     uint8_t  _padding5[7];
-    
+
     /* Paths (NULL = not used) */
     const char *model_path;        /**< Path to model bundle (.cbf) */
     const char *data_path;         /**< Path to test data */
@@ -468,7 +468,7 @@ typedef struct {
     char cpu_model[CB_MAX_CPU_MODEL];    /**< CPU identification string */
     uint32_t cpu_freq_mhz;               /**< Nominal CPU frequency */
     uint32_t _padding1;
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Configuration Echo
      *─────────────────────────────────────────────────────────────────────────*/
@@ -476,32 +476,32 @@ typedef struct {
     uint32_t measure_iterations;
     uint32_t batch_size;
     uint32_t _padding2;
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Timing Results (CB-MATH-001 §6)
      *─────────────────────────────────────────────────────────────────────────*/
     cb_latency_stats_t latency;
     cb_throughput_t throughput;
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Hardware Counters (optional)
      *─────────────────────────────────────────────────────────────────────────*/
     cb_hwcounters_t hwcounters;
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Environmental Data (CB-MATH-001 §9)
      *─────────────────────────────────────────────────────────────────────────*/
     cb_env_stats_t environment;
     bool env_stable;                     /**< cb_env_is_stable() result */
     uint8_t _padding3[7];
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Histogram (optional, caller-provided buffer)
      *─────────────────────────────────────────────────────────────────────────*/
     cb_histogram_t histogram;
     bool histogram_valid;
     uint8_t _padding4[7];
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Verification (CB-MATH-001 §8)
      *─────────────────────────────────────────────────────────────────────────*/
@@ -510,7 +510,7 @@ typedef struct {
     uint32_t verification_failures;      /**< Count of mismatches */
     cb_hash_t output_hash;               /**< H(all outputs) */
     cb_hash_t result_hash;               /**< H(result binding) */
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Metadata
      *─────────────────────────────────────────────────────────────────────────*/
@@ -518,7 +518,7 @@ typedef struct {
     uint64_t benchmark_end_ns;           /**< End timestamp */
     uint64_t benchmark_duration_ns;      /**< Total duration */
     uint64_t timestamp_unix;             /**< Unix timestamp for reporting */
-    
+
     /*─────────────────────────────────────────────────────────────────────────
      * Fault State (CB-MATH-001 §5)
      *─────────────────────────────────────────────────────────────────────────*/
@@ -538,12 +538,12 @@ static inline bool cb_result_is_valid(const cb_result_t *result) {
     if (cb_has_fault(&result->faults)) {
         return false;
     }
-    
+
     /* Determinism must be verified (if verification was enabled) */
     if (result->verification_failures > 0) {
         return false;
     }
-    
+
     return true;
 }
 ```
@@ -570,22 +570,22 @@ typedef struct {
     /* Platform identification */
     char platform_a[CB_MAX_PLATFORM];
     char platform_b[CB_MAX_PLATFORM];
-    
+
     /* Comparability gate */
     bool outputs_identical;              /**< H_outputs match */
     bool comparable;                     /**< Safe to compare performance */
     uint8_t _padding1[6];
-    
+
     /* Latency comparison (only valid if comparable == true) */
     int64_t  latency_diff_ns;            /**< B.p99 - A.p99 (+ = B slower) */
     uint32_t latency_ratio_q16;          /**< B.p99 / A.p99 in Q16.16 */
     uint32_t _padding2;
-    
+
     /* Throughput comparison */
     int64_t  throughput_diff;            /**< B - A inferences/sec */
     uint32_t throughput_ratio_q16;       /**< B / A in Q16.16 */
     uint32_t _padding3;
-    
+
     /* WCET comparison */
     int64_t  wcet_diff_ns;               /**< B.wcet_bound - A.wcet_bound */
     uint32_t wcet_ratio_q16;             /**< B / A in Q16.16 */

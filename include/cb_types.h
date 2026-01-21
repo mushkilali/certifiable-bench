@@ -540,14 +540,15 @@ typedef cb_result_code_t (*cb_inference_fn)(void *ctx,
 /**
  * @brief Runner internal state
  *
- * Holds pre-allocated sample buffer and configuration for benchmark execution.
+ * Holds caller-provided sample buffer and configuration for benchmark execution.
+ * No dynamic allocation — caller provides all buffers.
  *
  * @traceability SRS-003-RUNNER §4.2
  */
 typedef struct {
     cb_config_t config;                  /**< Copy of configuration */
-    uint64_t *samples;                   /**< Pre-allocated sample buffer */
-    uint32_t sample_capacity;            /**< Buffer capacity */
+    uint64_t *samples;                   /**< Caller-provided sample buffer */
+    uint32_t sample_capacity;            /**< Buffer capacity (caller-provided) */
     uint32_t samples_collected;          /**< Samples collected so far */
     cb_verify_ctx_t verify_ctx;          /**< Output verification context */
     cb_env_snapshot_t env_start;         /**< Environment at start */

@@ -15,7 +15,7 @@
 #include "cb_verify.h"
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h>  /* strtoull, strtoll */
 #include <string.h>
 #include <inttypes.h>
 
@@ -482,6 +482,9 @@ static int json_extract_bool(const char *json, const char *key, bool *out)
     return 0;
 }
 
+/** Maximum JSON file size for loading (64KB) */
+#define CB_MAX_JSON_SIZE 65536
+
 /**
  * @brief Load results from JSON file
  * @satisfies REPORT-F-030 through REPORT-F-035
@@ -489,7 +492,7 @@ static int json_extract_bool(const char *json, const char *key, bool *out)
 cb_result_code_t cb_load_json(const char *path, cb_result_t *result)
 {
     FILE *fp;
-    char *json;
+    static char json[CB_MAX_JSON_SIZE];  /* Static buffer - not thread-safe */
     long file_size;
     size_t bytes_read;
     char hash_hex[65];
@@ -511,29 +514,21 @@ cb_result_code_t cb_load_json(const char *path, cb_result_t *result)
     file_size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    if (file_size <= 0 || file_size > 1024 * 1024) {  /* Max 1MB */
+    if (file_size <= 0 || file_size >= CB_MAX_JSON_SIZE) {
         fclose(fp);
         return CB_ERR_IO;
-    }
-
-    json = (char *)malloc((size_t)file_size + 1);
-    if (json == NULL) {
-        fclose(fp);
-        return CB_ERR_OUT_OF_MEMORY;
     }
 
     bytes_read = fread(json, 1, (size_t)file_size, fp);
     fclose(fp);
 
     if (bytes_read != (size_t)file_size) {
-        free(json);
         return CB_ERR_IO;
     }
     json[file_size] = '\0';
 
     /* REPORT-F-035: Required fields */
     if (!json_extract_string(json, "platform", result->platform, sizeof(result->platform))) {
-        free(json);
         return CB_ERR_INVALID_CONFIG;
     }
 
@@ -548,7 +543,6 @@ cb_result_code_t cb_load_json(const char *path, cb_result_t *result)
 
     /* Latency - required */
     if (!json_extract_u64(json, "min_ns", &result->latency.min_ns)) {
-        free(json);
         return CB_ERR_INVALID_CONFIG;
     }
     json_extract_u64(json, "max_ns", &result->latency.max_ns);
@@ -610,7 +604,6 @@ cb_result_code_t cb_load_json(const char *path, cb_result_t *result)
     json_extract_u64(json, "benchmark_duration_ns", &result->benchmark_duration_ns);
     json_extract_u64(json, "timestamp_unix", &result->timestamp_unix);
 
-    free(json);
     return CB_OK;
 }
 

@@ -12,7 +12,6 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "cb_types.h"
@@ -21,6 +20,13 @@
 #include "cb_report.h"
 #include "cb_platform.h"
 #include "cb_verify.h"
+
+/*─────────────────────────────────────────────────────────────────────────────
+ * Sample Buffer (statically allocated)
+ *─────────────────────────────────────────────────────────────────────────────*/
+
+#define MAX_SAMPLES 10000
+static uint64_t g_sample_buffer[MAX_SAMPLES];
 
 /*─────────────────────────────────────────────────────────────────────────────
  * Mock Inference Function (replace with certifiable-inference integration)
@@ -39,7 +45,7 @@ static cb_result_code_t mock_inference(void *ctx, const void *input, void *outpu
     uint8_t *out = (uint8_t *)output;
 
     /* Deterministic transformation: XOR with position and rotate */
-    for (size_t i = 0; i < 1024; i++) {
+    for (uint32_t i = 0; i < 1024; i++) {
         out[i] = (uint8_t)((in[i] ^ (uint8_t)i) + 0x5A);
     }
 
@@ -54,7 +60,7 @@ static void print_usage(const char *prog)
 {
     printf("Usage: %s [options]\n", prog);
     printf("\nOptions:\n");
-    printf("  --iterations N     Measurement iterations (default: 1000)\n");
+    printf("  --iterations N     Measurement iterations (default: 1000, max: %d)\n", MAX_SAMPLES);
     printf("  --warmup N         Warmup iterations (default: 100)\n");
     printf("  --batch N          Batch size (default: 1)\n");
     printf("  --output PATH      Output JSON path (default: stdout summary)\n");
@@ -65,6 +71,16 @@ static void print_usage(const char *prog)
     printf("  %s --iterations 5000 --output result.json\n", prog);
 }
 
+static int parse_int(const char *str)
+{
+    int val = 0;
+    while (*str >= '0' && *str <= '9') {
+        val = val * 10 + (*str - '0');
+        str++;
+    }
+    return val;
+}
+
 int main(int argc, char *argv[])
 {
     cb_config_t config;
@@ -73,21 +89,22 @@ int main(int argc, char *argv[])
     const char *output_json = NULL;
     const char *output_csv = NULL;
     const char *compare_path = NULL;
+    int i;
 
     /* Initialise with defaults */
     cb_config_init(&config);
 
     /* Parse arguments */
-    for (int i = 1; i < argc; i++) {
+    for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "--iterations") == 0 && i + 1 < argc) {
-            config.measure_iterations = (uint32_t)atoi(argv[++i]);
+            config.measure_iterations = (uint32_t)parse_int(argv[++i]);
         } else if (strcmp(argv[i], "--warmup") == 0 && i + 1 < argc) {
-            config.warmup_iterations = (uint32_t)atoi(argv[++i]);
+            config.warmup_iterations = (uint32_t)parse_int(argv[++i]);
         } else if (strcmp(argv[i], "--batch") == 0 && i + 1 < argc) {
-            config.batch_size = (uint32_t)atoi(argv[++i]);
+            config.batch_size = (uint32_t)parse_int(argv[++i]);
         } else if (strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
             output_json = argv[++i];
         } else if (strcmp(argv[i], "--csv") == 0 && i + 1 < argc) {
@@ -99,6 +116,13 @@ int main(int argc, char *argv[])
             print_usage(argv[0]);
             return 1;
         }
+    }
+
+    /* Check buffer capacity */
+    if (config.measure_iterations > MAX_SAMPLES) {
+        fprintf(stderr, "Error: iterations (%u) exceeds buffer capacity (%d)\n",
+                config.measure_iterations, MAX_SAMPLES);
+        return 1;
     }
 
     /* Validate config */
@@ -130,15 +154,16 @@ int main(int argc, char *argv[])
     /* Prepare test data */
     uint8_t input[1024];
     uint8_t output[1024];
-    for (size_t i = 0; i < sizeof(input); i++) {
-        input[i] = (uint8_t)(i & 0xFF);
+    for (uint32_t j = 0; j < sizeof(input); j++) {
+        input[j] = (uint8_t)(j & 0xFF);
     }
 
-    /* Run benchmark */
+    /* Run benchmark with caller-provided buffer */
     printf("Running benchmark...\n");
     rc = cb_run_benchmark(&config, mock_inference, NULL,
                           input, sizeof(input),
                           output, sizeof(output),
+                          g_sample_buffer, MAX_SAMPLES,
                           &result);
 
     if (rc != CB_OK) {

@@ -76,19 +76,19 @@ static bool read_sysfs_int(const char *path, int64_t *value)
 {
     FILE *fp;
     char line[MAX_LINE_LEN];
-    
+
     fp = fopen(path, "r");
     if (fp == NULL) {
         return false;
     }
-    
+
     if (fgets(line, sizeof(line), fp) == NULL) {
         fclose(fp);
         return false;
     }
-    
+
     fclose(fp);
-    
+
     *value = strtoll(line, NULL, 10);
     return true;
 }
@@ -127,9 +127,9 @@ cb_result_code_t cb_cpu_model(char *buffer, uint32_t size)
     if (buffer == NULL || size == 0) {
         return CB_ERR_NULL_PTR;
     }
-    
+
     buffer[0] = '\0';
-    
+
 #ifdef __linux__
     /* Read from /proc/cpuinfo (PLATFORM-F-007) */
     FILE *fp = fopen(CPUINFO_PATH, "r");
@@ -138,7 +138,7 @@ cb_result_code_t cb_cpu_model(char *buffer, uint32_t size)
         buffer[size - 1] = '\0';
         return CB_OK;
     }
-    
+
     char line[MAX_LINE_LEN];
     while (fgets(line, sizeof(line), fp) != NULL) {
         /* Look for "model name" on x86 or "Model" on ARM */
@@ -149,13 +149,13 @@ cb_result_code_t cb_cpu_model(char *buffer, uint32_t size)
                 /* Skip colon and whitespace */
                 colon++;
                 while (*colon == ' ' || *colon == '\t') colon++;
-                
+
                 /* Remove trailing newline */
                 size_t len = strlen(colon);
                 if (len > 0 && colon[len - 1] == '\n') {
                     colon[len - 1] = '\0';
                 }
-                
+
                 /* Copy to buffer, truncating if necessary (PLATFORM-F-009) */
                 strncpy(buffer, colon, size - 1);
                 buffer[size - 1] = '\0';
@@ -163,14 +163,14 @@ cb_result_code_t cb_cpu_model(char *buffer, uint32_t size)
             }
         }
     }
-    
+
     fclose(fp);
-    
+
     if (buffer[0] == '\0') {
         strncpy(buffer, "unknown", size - 1);
         buffer[size - 1] = '\0';
     }
-    
+
 #elif defined(__APPLE__)
     /* macOS: use sysctl (PLATFORM-F-008) */
     FILE *fp = popen("sysctl -n machdep.cpu.brand_string 2>/dev/null", "r");
@@ -184,17 +184,17 @@ cb_result_code_t cb_cpu_model(char *buffer, uint32_t size)
         }
         pclose(fp);
     }
-    
+
     if (buffer[0] == '\0') {
         strncpy(buffer, "unknown", size - 1);
         buffer[size - 1] = '\0';
     }
-    
+
 #else
     strncpy(buffer, "unknown", size - 1);
     buffer[size - 1] = '\0';
 #endif
-    
+
     return CB_OK;
 }
 
@@ -205,12 +205,12 @@ uint32_t cb_cpu_freq_mhz(void)
 {
 #ifdef __linux__
     int64_t freq_khz;
-    
+
     if (read_sysfs_int(CPU_FREQ_PATH, &freq_khz)) {
         /* scaling_cur_freq is in kHz, convert to MHz */
         return (uint32_t)(freq_khz / 1000);
     }
-    
+
     /* Fallback: try /proc/cpuinfo */
     FILE *fp = fopen(CPUINFO_PATH, "r");
     if (fp != NULL) {
@@ -219,15 +219,16 @@ uint32_t cb_cpu_freq_mhz(void)
             if (strncmp(line, "cpu MHz", 7) == 0) {
                 char *colon = strchr(line, ':');
                 if (colon != NULL) {
-                    double mhz = strtod(colon + 1, NULL);
+                    /* Parse integer part only (ignore decimal) */
+                    uint32_t mhz = (uint32_t)strtoul(colon + 1, NULL, 10);
                     fclose(fp);
-                    return (uint32_t)mhz;
+                    return mhz;
                 }
             }
         }
         fclose(fp);
     }
-    
+
 #elif defined(__APPLE__)
     FILE *fp = popen("sysctl -n hw.cpufrequency 2>/dev/null", "r");
     if (fp != NULL) {
@@ -240,7 +241,7 @@ uint32_t cb_cpu_freq_mhz(void)
         pclose(fp);
     }
 #endif
-    
+
     return 0;  /* Unavailable */
 }
 
@@ -265,7 +266,7 @@ static bool try_open_hwcounters(void)
 {
     struct perf_event_attr pe;
     int i;
-    
+
     /* Counter configurations */
     static const struct {
         uint32_t type;
@@ -278,7 +279,7 @@ static bool try_open_hwcounters(void)
         { PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_INSTRUCTIONS },
         { PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_MISSES }
     };
-    
+
     /* Close any existing counters */
     for (i = 0; i < NUM_HW_COUNTERS; i++) {
         if (g_perf_fds[i] >= 0) {
@@ -286,7 +287,7 @@ static bool try_open_hwcounters(void)
             g_perf_fds[i] = -1;
         }
     }
-    
+
     /* Open each counter */
     for (i = 0; i < NUM_HW_COUNTERS; i++) {
         memset(&pe, 0, sizeof(pe));
@@ -296,9 +297,9 @@ static bool try_open_hwcounters(void)
         pe.disabled = 1;
         pe.exclude_kernel = 1;
         pe.exclude_hv = 1;
-        
+
         g_perf_fds[i] = perf_event_open(&pe, 0, -1, -1, 0);
-        
+
         if (g_perf_fds[i] < 0) {
             /* Clean up and return failure */
             int j;
@@ -309,7 +310,7 @@ static bool try_open_hwcounters(void)
             return false;
         }
     }
-    
+
     return true;
 }
 #endif
@@ -333,15 +334,15 @@ cb_result_code_t cb_hwcounters_start(void)
 {
 #ifdef __linux__
     int i;
-    
+
     if (!g_hwcounters_available) {
         return CB_ERR_HWCOUNTERS;
     }
-    
+
     if (g_hwcounters_started) {
         return CB_ERR_HWCOUNTERS;  /* Already started */
     }
-    
+
     /* Reset and enable all counters */
     for (i = 0; i < NUM_HW_COUNTERS; i++) {
         if (g_perf_fds[i] >= 0) {
@@ -349,7 +350,7 @@ cb_result_code_t cb_hwcounters_start(void)
             ioctl(g_perf_fds[i], PERF_EVENT_IOC_ENABLE, 0);
         }
     }
-    
+
     g_hwcounters_started = true;
     return CB_OK;
 #else
@@ -365,33 +366,33 @@ cb_result_code_t cb_hwcounters_stop(cb_hwcounters_t *counters)
     if (counters == NULL) {
         return CB_ERR_NULL_PTR;
     }
-    
+
     /* Clear output */
     memset(counters, 0, sizeof(*counters));
-    
+
 #ifdef __linux__
     int i;
     uint64_t values[NUM_HW_COUNTERS] = {0};
-    
+
     if (!g_hwcounters_started) {
         counters->available = false;
         return CB_ERR_HWCOUNTERS;
     }
-    
+
     /* Disable and read all counters */
     for (i = 0; i < NUM_HW_COUNTERS; i++) {
         if (g_perf_fds[i] >= 0) {
             ioctl(g_perf_fds[i], PERF_EVENT_IOC_DISABLE, 0);
-            
+
             ssize_t ret = read(g_perf_fds[i], &values[i], sizeof(uint64_t));
             if (ret != sizeof(uint64_t)) {
                 values[i] = 0;
             }
         }
     }
-    
+
     g_hwcounters_started = false;
-    
+
     /* Populate output structure */
     counters->available = true;
     counters->cycles = values[0];
@@ -400,21 +401,21 @@ cb_result_code_t cb_hwcounters_stop(cb_hwcounters_t *counters)
     counters->cache_misses = values[3];
     counters->branch_refs = values[4];
     counters->branch_misses = values[5];
-    
+
     /* Compute IPC in Q16.16 (PLATFORM-F-024) */
     if (counters->cycles > 0) {
         counters->ipc_q16 = (uint32_t)((counters->instructions << 16) / counters->cycles);
     } else {
         counters->ipc_q16 = 0;
     }
-    
+
     /* Compute cache miss rate in Q16.16 (PLATFORM-F-025) */
     if (counters->cache_refs > 0) {
         counters->cache_miss_rate_q16 = (uint32_t)((counters->cache_misses << 16) / counters->cache_refs);
     } else {
         counters->cache_miss_rate_q16 = 0;
     }
-    
+
     return CB_OK;
 #else
     counters->available = false;
@@ -433,12 +434,12 @@ static uint64_t read_cpu_freq_hz(void)
 {
 #ifdef __linux__
     int64_t freq_khz;
-    
+
     if (read_sysfs_int(CPU_FREQ_PATH, &freq_khz)) {
         return (uint64_t)freq_khz * 1000;  /* kHz to Hz */
     }
 #endif
-    
+
     return 0;
 }
 
@@ -449,13 +450,13 @@ static int32_t read_cpu_temp_mC(void)
 {
 #ifdef __linux__
     int64_t temp;
-    
+
     if (read_sysfs_int(CPU_TEMP_PATH, &temp)) {
         /* Linux thermal_zone reports in millidegrees already */
         return (int32_t)temp;
     }
 #endif
-    
+
     return 0;
 }
 
@@ -466,12 +467,12 @@ static uint32_t read_throttle_count(void)
 {
 #ifdef __linux__
     int64_t count;
-    
+
     if (read_sysfs_int(THROTTLE_PATH, &count)) {
         return (uint32_t)count;
     }
 #endif
-    
+
     return 0;
 }
 
@@ -483,19 +484,19 @@ cb_result_code_t cb_env_snapshot(cb_env_snapshot_t *snapshot)
     if (snapshot == NULL) {
         return CB_ERR_NULL_PTR;
     }
-    
+
     /* Get monotonic timestamp (PLATFORM-F-064) */
     snapshot->timestamp_ns = cb_timer_now_ns();
-    
+
     /* Get CPU frequency (PLATFORM-F-061) */
     snapshot->cpu_freq_hz = read_cpu_freq_hz();
-    
+
     /* Get CPU temperature (PLATFORM-F-062) */
     snapshot->cpu_temp_mC = read_cpu_temp_mC();
-    
+
     /* Get throttle count (PLATFORM-F-063) */
     snapshot->throttle_count = read_throttle_count();
-    
+
     return CB_OK;
 }
 
@@ -509,23 +510,23 @@ cb_result_code_t cb_env_compute_stats(const cb_env_snapshot_t *start,
     if (start == NULL || end == NULL || stats == NULL) {
         return CB_ERR_NULL_PTR;
     }
-    
+
     /* Copy snapshots */
     stats->start = *start;
     stats->end = *end;
-    
+
     /* Compute min/max frequency (PLATFORM-F-066) */
     stats->min_freq_hz = (start->cpu_freq_hz < end->cpu_freq_hz) ?
                          start->cpu_freq_hz : end->cpu_freq_hz;
     stats->max_freq_hz = (start->cpu_freq_hz > end->cpu_freq_hz) ?
                          start->cpu_freq_hz : end->cpu_freq_hz;
-    
+
     /* Compute min/max temperature (PLATFORM-F-067) */
     stats->min_temp_mC = (start->cpu_temp_mC < end->cpu_temp_mC) ?
                          start->cpu_temp_mC : end->cpu_temp_mC;
     stats->max_temp_mC = (start->cpu_temp_mC > end->cpu_temp_mC) ?
                          start->cpu_temp_mC : end->cpu_temp_mC;
-    
+
     /* Compute total throttle events (PLATFORM-F-068) */
     if (end->throttle_count >= start->throttle_count) {
         stats->total_throttle_events = end->throttle_count - start->throttle_count;
@@ -533,7 +534,7 @@ cb_result_code_t cb_env_compute_stats(const cb_env_snapshot_t *start,
         /* Counter wrapped or reset */
         stats->total_throttle_events = 0;
     }
-    
+
     return CB_OK;
 }
 
@@ -545,12 +546,12 @@ bool cb_env_check_stable(const cb_env_stats_t *stats)
     if (stats == NULL) {
         return false;
     }
-    
+
     /* If no frequency data, assume stable (graceful degradation) */
     if (stats->start.cpu_freq_hz == 0) {
         return true;
     }
-    
+
     /*
      * Check for frequency drop > 5% (PLATFORM-F-091)
      * Use integer math per PLATFORM-F-094:
@@ -558,16 +559,16 @@ bool cb_env_check_stable(const cb_env_stats_t *stats)
      */
     uint64_t end_scaled = stats->end.cpu_freq_hz * 100;
     uint64_t threshold = stats->start.cpu_freq_hz * 95;
-    
+
     if (end_scaled < threshold) {
         return false;  /* Frequency dropped > 5% */
     }
-    
+
     /* Check for throttle events (PLATFORM-F-092) */
     if (stats->total_throttle_events > 0) {
         return false;
     }
-    
+
     return true;
 }
 
@@ -580,12 +581,12 @@ cb_result_code_t cb_platform_init(void)
     if (g_platform_initialized) {
         return CB_OK;
     }
-    
+
 #ifdef __linux__
     /* Try to open hardware counters */
     g_hwcounters_available = try_open_hwcounters();
 #endif
-    
+
     g_platform_initialized = true;
     return CB_OK;
 }

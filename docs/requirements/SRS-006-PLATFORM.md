@@ -286,16 +286,16 @@ bool cb_env_is_stable(const cb_env_stats_t *stats) {
     /* Use integer math: end_freq * 100 >= start_freq * 95 */
     uint64_t end_scaled = stats->end.cpu_freq_hz * 100;
     uint64_t threshold = stats->start.cpu_freq_hz * 95;
-    
+
     if (end_scaled < threshold) {
         return false;  /* Frequency dropped > 5% */
     }
-    
+
     /* Check for throttle events */
     if (stats->total_throttle_events > 0) {
         return false;
     }
-    
+
     return true;
 }
 ```

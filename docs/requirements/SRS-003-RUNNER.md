@@ -233,9 +233,9 @@ for (i = 0; i < config->measure_iterations; i++) {
     inference_run(model, data[i % num_inputs], output);
     t_end = cb_timer_now_ns();
     /* === CRITICAL LOOP END === */
-    
+
     samples[i] = t_end - t_start;
-    
+
     /* Verification outside critical timing */
     if (config->verify_outputs) {
         verify_ctx_update(&verify_ctx, output, output_size);
